@@ -101,7 +101,9 @@ const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
-const API_BASE = 'http://localhost:3000/api/auth'
+// ★ 修改这一行
+const API_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE = API_URL + '/api/auth'
 
 const toggleMode = () => {
   isRegister.value = !isRegister.value
@@ -161,20 +163,22 @@ const handleSubmit = async () => {
         password: password.value
       })
 
-      // 保存 token 和用户名（修复：从 res.data.user 中取）
+      // 保存 token 和用户名
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('username', res.data.user.username)
 
       // 登录后立即拉取用户资料（头像、昵称）
       try {
-        const profileRes = await axios.get('http://localhost:3000/api/user/profile', {
+        // ★ 修改这里
+        const profileRes = await axios.get(API_URL + '/api/user/profile', {
           headers: { Authorization: 'Bearer ' + res.data.token }
         })
         if (profileRes.data.nickname) {
           localStorage.setItem('nickname', profileRes.data.nickname)
         }
         if (profileRes.data.avatar) {
-          localStorage.setItem('avatar', 'http://localhost:3000' + profileRes.data.avatar)
+          // ★ 修改这里
+          localStorage.setItem('avatar', API_URL + profileRes.data.avatar)
         }
       } catch (e) {
         // 资料拉取失败不影响登录

@@ -94,7 +94,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'updated'])
 
-const API_BASE = 'http://localhost:3000/api/user'
+// ★ 修改这两行
+const API_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE = API_URL + '/api/user'
 
 const username = ref('')
 const nicknameInput = ref('')
@@ -131,7 +133,8 @@ async function loadProfile() {
     username.value = res.data.username
     nicknameInput.value = res.data.nickname || res.data.username
     if (res.data.avatar) {
-      avatarPreview.value = 'http://localhost:3000' + res.data.avatar
+      // ★ 修改这里
+      avatarPreview.value = API_URL + res.data.avatar
     } else {
       avatarPreview.value = null
     }
@@ -200,7 +203,8 @@ async function saveProfile() {
     // 3. 更新本地存储
     localStorage.setItem('nickname', nicknameInput.value.trim())
     if (newAvatarUrl) {
-      localStorage.setItem('avatar', 'http://localhost:3000' + newAvatarUrl)
+      // ★ 修改这里
+      localStorage.setItem('avatar', API_URL + newAvatarUrl)
     }
 
     showMessage('保存成功！', 'success')
@@ -211,7 +215,8 @@ async function saveProfile() {
       emit('updated', {
         nickname: nicknameInput.value.trim(),
         avatar: newAvatarUrl
-          ? 'http://localhost:3000' + newAvatarUrl
+          // ★ 修改这里
+          ? API_URL + newAvatarUrl
           : avatarPreview.value
       })
     }, 800)

@@ -1,10 +1,14 @@
+// API 基础地址配置
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export async function chatStream(message, sessionId, terminalId, onChunk, onSuccess, onError) {
   try {
-    const response = await fetch('/api/chat/stream', {
+    const response = await fetch(`${API_URL}/api/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, sessionId, terminalId })
     });
+    
 
     if (!response.ok) {
       throw new Error('服务器请求失败 (' + response.status + ')');
@@ -24,16 +28,13 @@ export async function chatStream(message, sessionId, terminalId, onChunk, onSucc
 
       try {
         const parsed = JSON.parse(data);
-        // 兼容绝大多数后端字段名
         const content = parsed.content || parsed.text || parsed.answer || parsed.data || parsed.message || parsed.result;
         if (typeof content === 'string' && content) {
           onChunk(content);
         } else {
-          // 如果实在不知道字段名，把原始 JSON 直接显示出来，保证你能看到东西
           onChunk(JSON.stringify(parsed));
         }
       } catch (e) {
-        // 连 JSON 都不是，当纯文本直接显示
         if (data) onChunk(data);
       }
     }
@@ -44,7 +45,6 @@ export async function chatStream(message, sessionId, terminalId, onChunk, onSucc
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      // 最后一个元素可能不完整，先存起来
       buffer = lines.pop() || '';
 
       for (const line of lines) {
@@ -54,7 +54,6 @@ export async function chatStream(message, sessionId, terminalId, onChunk, onSucc
       }
     }
     
-    // 【最关键的修复】：流结束后，把最后剩在缓冲区里的内容也处理掉
     if (buffer.trim()) {
       processText(buffer.trim());
     }
