@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORION AI Studio</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #00e5cc;
+            --primary-dark: #00b8a3;
+            --bg-dark: #0a0e17;
+            --bg-card: #111827;
+            --bg-card-hover: #1a2332;
+            --text-white: #ffffff;
+            --text-gray: #9ca3af;
+            --text-dim: #6b7280;
+            --border-color: #1e2a3a;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-white);
+            overflow-x: hidden;
+        }
+
+        /* Background Layer */
+        #bg-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background-color: var(--bg-dark);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        #bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: rgba(10, 14, 23, 0.85);
+        }
+
+        #particles-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ============================================================
+           ANIMATION SYSTEM - 7种入场动画 + 交错延迟 + 分割线
+           ============================================================ */
+
+        /* 1. 从下方淡入上升（默认） */
+        .anim-up {
+            opacity: 0;
+            transform: translateY(60px);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 2. 从左侧滑入 */
+        .anim-left {
+            opacity: 0;
+            transform: translateX(-80px);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-left.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* 3. 从右侧滑入 */
+        .anim-right {
+            opacity: 0;
+            transform: translateX(80px);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-right.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* 4. 缩放弹入 */
+        .anim-scale {
+            opacity: 0;
+            transform: scale(0.75);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-scale.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* 5. 模糊消散入场 */
+        .anim-blur {
+            opacity: 0;
+            filter: blur(15px);
+            transform: translateY(30px);
+            transition: all 1s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-blur.visible {
+            opacity: 1;
+            filter: blur(0);
+            transform: translateY(0);
+        }
+
+        /* 6. 3D翻转入场 */
+        .anim-flip {
+            opacity: 0;
+            transform: perspective(800px) rotateY(25deg) translateY(30px);
+            transition: all 1s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-flip.visible {
+            opacity: 1;
+            transform: perspective(800px) rotateY(0) translateY(0);
+        }
+
+        /* 7. 旋转上浮 */
+        .anim-rotate {
+            opacity: 0;
+            transform: translateY(50px) rotate(5deg);
+            transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .anim-rotate.visible {
+            opacity: 1;
+            transform: translateY(0) rotate(0deg);
+        }
+
+        /* 旧的 animate-on-scroll 保持兼容 */
+        .animate-on-scroll {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .animate-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 交错延迟 */
+        .delay-1 {
+            transition-delay: 0.05s !important;
+        }
+
+        .delay-2 {
+            transition-delay: 0.12s !important;
+        }
+
+        .delay-3 {
+            transition-delay: 0.19s !important;
+        }
+
+        .delay-4 {
+            transition-delay: 0.26s !important;
+        }
+
+        .delay-5 {
+            transition-delay: 0.33s !important;
+        }
+
+        .delay-6 {
+            transition-delay: 0.40s !important;
+        }
+
+        .delay-7 {
+            transition-delay: 0.47s !important;
+        }
+
+        .delay-8 {
+            transition-delay: 0.54s !important;
+        }
+
+        /* 分割线扫光动画 */
+        .section-divider {
+            width: 100%;
+            height: 1px;
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        .section-divider::after {
+            content: '';
+            display: block;
+            width: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            margin: 0 auto;
+            transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .section-divider.visible::after {
+            width: 100%;
+        }
+
+        /* 鼠标跟随光晕 */
+        .cursor-glow {
+            position: fixed;
+            width: 350px;
+            height: 350px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 229, 204, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.4s;
+            opacity: 0;
+        }
+
+        .cursor-glow.active {
+            opacity: 1;
+        }
+
+        /* 卡片按钮流光效果 */
+        .btn-primary {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        /* 项目卡片顶部彩条 */
+        .project-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .project-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), transparent);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .project-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        /* 浮动动画 */
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        @keyframes floatSlow {
+
+            0%,
+            100% {
+                transform: translateY(0px) rotate(0deg);
+            }
+
+            50% {
+                transform: translateY(-6px) rotate(1deg);
+            }
+        }
+
+        /* ============================================================ */
+
+        /* Background Customizer */
+        .bg-customizer-toggle {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 10000;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            color: #0a0e17;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 229, 204, 0.3);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse-glow 3s infinite;
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                box-shadow: 0 4px 20px rgba(0, 229, 204, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 4px 40px rgba(0, 229, 204, 0.5);
+            }
+        }
+
+        .bg-customizer-toggle:hover {
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 4px 30px rgba(0, 229, 204, 0.5);
+        }
+
+        .bg-customizer-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 80px;
+            z-index: 10000;
+            width: 320px;
+            background: rgba(17, 24, 39, 0.97);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: none;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .bg-customizer-panel.active {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bg-customizer-panel h3 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bg-option-group {
+            margin-bottom: 16px;
+        }
+
+        .bg-option-group label {
+            display: block;
+            color: var(--text-gray);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .bg-option-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .bg-option-group input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+
+        .bg-option-group input[type="file"] {
+            display: none;
+        }
+
+        .file-upload-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-card);
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            color: var(--text-gray);
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .file-upload-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .preset-bgs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .preset-bg-item {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .preset-bg-item:hover,
+        .preset-bg-item.active {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .bg-reset-btn {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-gray);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+            margin-top: 8px;
+        }
+
+        .bg-reset-btn:hover {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        /* Navigation */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            background: transparent;
+        }
+
+        .navbar.scrolled {
+            background: rgba(10, 14, 23, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(30, 42, 58, 0.5);
+            padding: 12px 40px;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), #00b8a3);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #0a0e17;
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .nav-logo:hover .nav-logo-icon {
+            transform: rotate(10deg) scale(1.1);
+        }
+
+        .nav-logo-text {
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-gray);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.3s;
+            position: relative;
+            padding-bottom: 4px;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-white);
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-lang {
+            color: var(--text-gray);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            transition: color 0.3s;
+        }
+
+        .nav-lang:hover {
+            color: var(--text-white);
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-white);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* Hero Section */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 120px 20px 80px;
+            z-index: 1;
+        }
+
+        .hero-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(0, 229, 204, 0.08) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: transform 0.1s;
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), #00ffcc, var(--primary));
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            letter-spacing: 4px;
+            animation: fadeInUp 1s ease, shimmer 4s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% center;
+            }
+
+            100% {
+                background-position: 200% center;
+            }
+        }
+
+        .hero .subtitle {
+            color: var(--text-gray);
+            font-size: 18px;
+            margin-bottom: 8px;
+            animation: fadeInUp 1s ease 0.2s both;
+        }
+
+        .hero .desc {
+            color: var(--text-dim);
+            font-size: 14px;
+            max-width: 500px;
+            line-height: 1.6;
+            margin-bottom: 40px;
+            animation: fadeInUp 1s ease 0.4s both;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            animation: fadeInUp 1s ease 0.6s both;
+        }
+
+        .btn-primary {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #0a0e17;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 229, 204, 0.3);
+        }
+
+        .btn-outline {
+            padding: 12px 28px;
+            background: transparent;
+            color: var(--text-white);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--text-dim);
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateX(-50%) translateY(0);
+            }
+
+            50% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Section Common */
+        .section {
+            position: relative;
+            z-index: 1;
+            padding: 100px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(0, 229, 204, 0.1);
+            border: 1px solid rgba(0, 229, 204, 0.2);
+            border-radius: 20px;
+            color: var(--primary);
+            font-size: 12px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .section-subtitle {
+            color: var(--text-dim);
+            font-size: 14px;
+            max-width: 500px;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-header .section-subtitle {
+            margin: 0 auto;
+        }
+
+        /* About Section */
+        .about {
+            padding: 100px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .about-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .about-text .desc {
+            color: var(--text-gray);
+            font-size: 14px;
+            line-height: 1.8;
+            margin: 20px 0 30px;
+        }
+
+        .about-features {
+            display: flex;
+            gap: 16px;
+        }
+
+        .about-feature-card {
+            padding: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            text-align: center;
+            flex: 1;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .about-feature-card:hover {
+            border-color: rgba(0, 229, 204, 0.3);
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(0, 229, 204, 0.08);
+        }
+
+        .about-feature-card .icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(0, 229, 204, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            color: var(--primary);
+            font-size: 20px;
+            transition: all 0.4s;
+        }
+
+        .about-feature-card:hover .icon {
+            transform: scale(1.15) rotate(5deg);
+            background: rgba(0, 229, 204, 0.18);
+        }
+
+        .about-feature-card h4 {
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .about-feature-card p {
+            color: var(--text-dim);
+            font-size: 11px;
+        }
+
+        .about-image {
+            display: flex;
+            justify-content: center;
+        }
+
+        .about-image-wrapper {
+            width: 320px;
+            height: 380px;
+            border-radius: 20px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #e0fffe, #b2f5ea);
+            position: relative;
+            animation: floatSlow 5s ease-in-out infinite;
+        }
+
+        .about-image-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Team Section */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .team-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .team-card:hover {
+            border-color: rgba(0, 229, 204, 0.3);
+            transform: translateY(-8px);
+            box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .team-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: rgba(0, 229, 204, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 28px;
+            color: var(--primary);
+            transition: all 0.4s;
+        }
+
+        .team-card:hover .team-avatar {
+            transform: scale(1.1);
+            background: rgba(0, 229, 204, 0.18);
+            box-shadow: 0 0 30px rgba(0, 229, 204, 0.15);
+        }
+
+        .team-card h4 {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .team-card .role {
+            color: var(--text-dim);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .team-card .title {
+            color: var(--text-gray);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .team-tags {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .team-tag {
+            padding: 3px 10px;
+            background: rgba(0, 229, 204, 0.1);
+            border-radius: 12px;
+            color: var(--primary);
+            font-size: 11px;
+            transition: all 0.3s;
+        }
+
+        .team-card:hover .team-tag {
+            background: rgba(0, 229, 204, 0.18);
+        }
+
+        /* Projects Section */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .project-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px 24px;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .project-card:hover {
+            border-color: rgba(0, 229, 204, 0.3);
+            transform: translateY(-8px);
+            box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .project-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .project-type-tag {
+            padding: 3px 10px;
+            background: rgba(0, 229, 204, 0.08);
+            border: 1px solid rgba(0, 229, 204, 0.15);
+            border-radius: 12px;
+            color: var(--primary);
+            font-size: 11px;
+        }
+
+        .project-status {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+
+        .status-dev {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+
+        .status-beta {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+        }
+
+        .project-card h4 {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .project-card .desc {
+            color: var(--text-dim);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .project-link {
+            color: var(--primary);
+            font-size: 13px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: gap 0.3s;
+        }
+
+        .project-link:hover {
+            gap: 8px;
+        }
+
+        /* Values Section */
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            text-align: center;
+            padding: 60px 0;
+        }
+
+        .value-item .icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(0, 229, 204, 0.08);
+            border: 1px solid rgba(0, 229, 204, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 24px;
+            color: var(--primary);
+            transition: all 0.4s;
+        }
+
+        .value-item:hover .icon {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 229, 204, 0.15);
+            background: rgba(0, 229, 204, 0.15);
+        }
+
+        .value-item h4 {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .value-item p {
+            color: var(--text-dim);
+            font-size: 13px;
+            line-height: 1.6;
+            max-width: 260px;
+            margin: 0 auto;
+        }
+
+        /* Contact Section */
+        .contact {
+            position: relative;
+            z-index: 1;
+            padding: 80px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .contact-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 48px;
+            transition: all 0.4s;
+        }
+
+        .contact-wrapper:hover {
+            border-color: rgba(0, 229, 204, 0.15);
+        }
+
+        .contact-info .section-tag {
+            margin-bottom: 12px;
+        }
+
+        .contact-info h2 {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .contact-info .desc {
+            color: var(--text-dim);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        .contact-detail {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .contact-detail:hover {
+            transform: translateX(5px);
+        }
+
+        .contact-detail .icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(0, 229, 204, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 14px;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .contact-detail:hover .icon {
+            background: rgba(0, 229, 204, 0.2);
+            transform: scale(1.1);
+        }
+
+        .contact-detail h4 {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .contact-detail p {
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        .contact-form h3 {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-gray);
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(10, 14, 23, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-white);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-dim);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 229, 204, 0.08);
+        }
+
+        .form-group textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        .form-group select {
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .form-submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #0a0e17;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .form-submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .form-submit-btn:hover::before {
+            left: 100%;
+        }
+
+        .form-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 229, 204, 0.3);
+        }
+
+        /* Footer */
+        .footer {
+            position: relative;
+            z-index: 1;
+            border-top: 1px solid var(--border-color);
+            padding: 24px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-logo-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #0a0e17;
+            font-size: 12px;
+        }
+
+        .footer-logo-text {
+            color: var(--text-white);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .footer-copyright {
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .about-content {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .about-image {
+                order: -1;
+            }
+
+            .team-grid,
+            .projects-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .contact-wrapper {
+                grid-template-columns: 1fr;
+                padding: 32px;
+            }
+
+            .values-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 30px;
+            }
+
+            .hero h1 {
+                font-size: 40px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 12px 20px;
+            }
+
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 60px;
+                left: 0;
+                right: 0;
+                background: rgba(10, 14, 23, 0.98);
+                flex-direction: column;
+                padding: 20px;
+                gap: 16px;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .nav-lang {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .section,
+            .about {
+                padding: 60px 20px;
+            }
+
+            .team-grid,
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .values-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .contact {
+                padding: 40px 20px;
+            }
+
+            .about-features {
+                flex-direction: column;
+            }
+
+            .footer {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+                padding: 24px 20px;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                width: 100%;
+                max-width: 280px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .bg-customizer-panel {
+                right: 10px;
+                left: 10px;
+                width: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Cursor Glow -->
+    <div class="cursor-glow" id="cursorGlow"></div>
+
+    <!-- Background Layer -->
+    <div id="bg-layer"
+        style="background-image: url('/frontend/src/assets/background.png'); background-size: cover; background-position: center;">
+    </div>
+    <div id="bg-overlay"></div>
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- Background Customizer Toggle -->
+    <button class="bg-customizer-toggle" onclick="toggleBgPanel()" title="自定义背景">
+        <i class="fas fa-palette"></i>
+    </button>
+
+    <!-- Background Customizer Panel -->
+    <div class="bg-customizer-panel" id="bgPanel">
+        <h3><i class="fas fa-paint-brush"></i> 自定义背景</h3>
+        <div class="bg-option-group">
+            <label>背景颜色</label>
+            <input type="color" id="bgColor" value="#0a0e17" onchange="changeBgColor(this.value)">
+        </div>
+        <div class="bg-option-group">
+            <label>上传背景图片</label>
+            <label class="file-upload-btn" for="bgImageUpload">
+                <i class="fas fa-cloud-upload-alt"></i> 点击选择图片
+            </label>
+            <input type="file" id="bgImageUpload" accept="image/*" onchange="uploadBgImage(event)">
+        </div>
+        <div class="bg-option-group">
+            <label>遮罩透明度: <span id="overlayVal">85%</span></label>
+            <input type="range" min="0" max="100" value="85" id="overlayRange" oninput="changeOverlay(this.value)">
+        </div>
+        <div class="bg-option-group">
+            <label>预设背景</label>
+            <div class="preset-bgs">
+                <div class="preset-bg-item active" style="background: #0a0e17;" onclick="presetBg('default', this)">
+                </div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);"
+                    onclick="presetBg('gradient1', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);"
+                    onclick="presetBg('gradient2', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #0d1b2a, #1b263b, #415a77);"
+                    onclick="presetBg('gradient3', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #000000, #1a1a1a);"
+                    onclick="presetBg('dark', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #0c0c1d, #1a0a2e);"
+                    onclick="presetBg('purple', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #1a0000, #2d0a0a);"
+                    onclick="presetBg('red', this)"></div>
+                <div class="preset-bg-item" style="background: linear-gradient(135deg, #001a0a, #0a2d1a);"
+                    onclick="presetBg('green', this)"></div>
+            </div>
+        </div>
+        <div class="bg-option-group">
+            <label>粒子效果</label>
+            <div style="display:flex;gap:8px;">
+                <button class="file-upload-btn" style="flex:1" onclick="setParticles(true)">开启</button>
+                <button class="file-upload-btn" style="flex:1" onclick="setParticles(false)">关闭</button>
+            </div>
+        </div>
+        <button class="bg-reset-btn" onclick="resetBg()">
+            <i class="fas fa-undo"></i> 恢复默认
+        </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <a href="#" class="nav-logo">
+            <div class="nav-logo-icon">A</div>
+            <span class="nav-logo-text">ATRI</span>
+        </a>
+        <ul class="nav-links" id="navLinks">
+            <li><a href="#about">关于我们</a></li>
+            <li><a href="#team">团队成员</a></li>
+            <li><a href="#projects">项目服务</a></li>
+            <li><a href="#contact">联系我们</a></li>
+        </ul>
+        <button class="nav-lang"><span>开始对话</span> <i class="fas fa-chevron-down" style="font-size:10px;"></i></button>
+        <button class="mobile-menu-btn" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+        <div class="hero-glow"></div>
+        <h1>ATRI STUDIO</h1>
+        <p class="subtitle">探索AI智能的无限可能</p>
+        <p class="desc">广州工程技术职业学院·信息工程学院<br>专注于AI应用开发与创新实践的先驱力量</p>
+        <div class="hero-buttons">
+            <a href="#projects" class="btn-primary">了解我们的项目 <i class="fas fa-arrow-right"></i></a>
+            <a href="#contact" class="btn-outline">联系我们 <i class="fas fa-external-link-alt"
+                    style="font-size:11px;"></i></a>
+        </div>
+        <div class="scroll-indicator">
+            <span>向下滚动</span>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about" id="about">
+        <div class="about-content">
+            <div class="about-text">
+                <span class="section-tag anim-up delay-1">关于我们</span>
+                <h2 class="section-title anim-blur delay-2">以AI之名<br>创造无限可能</h2>
+                <p class="desc anim-up delay-3">ATRI Studio
+                    是广州工程技术职业学院信息工程学院旗下的BUG即使Featue创新工作室。在指导老师的指导引领下，我们专注于人工智能应用开发、智能系统构建和技术创新实践，致力于将AI技术融入社会各行业与生产生活。
+                </p>
+                <div class="about-features">
+                    <div class="about-feature-card anim-scale delay-4">
+                        <div class="icon"><i class="fas fa-users"></i></div>
+                        <h4>跨学科协作</h4>
+                        <p>汇集多元背景的成员</p>
+                    </div>
+                    <div class="about-feature-card anim-scale delay-5">
+                        <div class="icon"><i class="fas fa-cogs"></i></div>
+                        <h4>实战平台</h4>
+                        <p>真实项目驱动学习</p>
+                    </div>
+                    <div class="about-feature-card anim-scale delay-6">
+                        <div class="icon"><i class="fas fa-rocket"></i></div>
+                        <h4>热点技术平台</h4>
+                        <p>紧跟AI前沿技术</p>
+                    </div>
+                </div>
+            </div>
+            <div class="about-image anim-right delay-2">
+                <div class="about-image-wrapper">
+                    <img src="/frontend/src/assets/teams.jpg" alt="角色头像">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Team Section -->
+    <section class="section" id="team">
+        <div class="section-header">
+            <span class="section-tag anim-up delay-1">团队</span>
+            <h2 class="section-title anim-blur delay-2">认识我们的团队</h2>
+            <p class="section-subtitle anim-up delay-3">一群对AI充满热情的技术不断开拓，用专业与创造温暖为每一次创新</p>
+        </div>
+
+        <div class="team-grid">
+            <div class="team-card anim-flip delay-1">
+                <div class="team-avatar"><i class="fas fa-user-tie"></i></div>
+                <h4>王梓烁</h4>
+                <p class="role">工作室创始人</p>
+                <div class="team-tags">
+                    <span class="team-tag">项目管理</span>
+                    <span class="team-tag">AI策略</span>
+                </div>
+            </div>
+            <div class="team-card anim-flip delay-2">
+                <div class="team-avatar"><i class="fas fa-user"></i></div>
+                <h4>黄荣康</h4>
+                <p class="role">技术负责人·资深开发者</p>
+                <div class="team-tags">
+                    <span class="team-tag">全栈开发</span>
+                    <span class="team-tag">工程架构</span>
+                </div>
+            </div>
+            <div class="team-card anim-flip delay-3">
+                <div class="team-avatar"><i class="fas fa-user"></i></div>
+                <h4>曹惠茹</h4>
+                <p class="role">计算机应用副教授-指导老师</p>
+                <div class="team-tags">
+                    <span class="team-tag">AI训练</span>
+                    <span class="team-tag">科学顾问</span>
+                </div>
+            </div>
+            <div class="team-card anim-flip delay-4">
+                <div class="team-avatar"><i class="fas fa-code"></i></div>
+                <h4>陈伟</h4>
+                <p class="role">运营</p>
+                <div class="team-tags">
+                    <span class="team-tag">运维</span>
+                </div>
+            </div>
+            <div class="team-card anim-flip delay-5">
+                <div class="team-avatar"><i class="fas fa-code"></i></div>
+                <h4>吴壮洪</h4>
+                <p class="role">知识库管理员</p>
+                <div class="team-tags">
+                    <span class="team-tag">知识库检索</span>
+                    <span class="team-tag">文案编写</span>
+                </div>
+            </div>
+            <div class="team-card anim-flip delay-6">
+                <div class="team-avatar"><i class="fas fa-code"></i></div>
+                <h4>黎超贤</h4>
+                <p class="role">知识库管理员</p>
+                <div class="team-tags">
+                    <span class="team-tag">知识库收集</span>
+                    <span class="team-tag">文案编写</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Projects Section -->
+    <section class="section" id="projects">
+        <div class="section-header">
+            <span class="section-tag anim-up delay-1">项目服务</span>
+            <h2 class="section-title anim-blur delay-2">我们的产品与项目</h2>
+            <p class="section-subtitle anim-up delay-3">从概念到落地的完整方案，每一个项目都承载着我们对AI技术的探索</p>
+        </div>
+
+        <div class="projects-grid">
+            <div class="project-card anim-rotate delay-1">
+                <div class="project-meta">
+                    <span class="project-type-tag">AI-agant</span>
+                    <span class="project-status status-active">已上线</span>
+                </div>
+                <h4>ATRI教育智能体</h4>
+                <p class="desc">可以通过聊天的方式来帮你完成每一天的作业并且让你获得知识的快乐</p>
+                <a href="http://localhost:5173" target="_blank" class="project-link">访问项目 <i
+                        class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="project-card anim-rotate delay-2">
+                <div class="project-meta">
+                    <span class="project-type-tag">智能管理</span>
+                    <span class="project-status status-dev">开发中</span>
+                </div>
+                <h4>学生信息管理平台</h4>
+                <p class="desc">基于AI和机器学习的管理系统，智能数据分析优化管理</p>
+            </div>
+            <div class="project-card anim-rotate delay-3">
+                <div class="project-meta">
+                    <span class="project-type-tag">AI Agent</span>
+                    <span class="project-status status-active">已上线</span>
+                </div>
+                <h4>AI心理辅导助手</h4>
+                <p class="desc">智能心理辅导工具，帮助用户进行高效心理健康评测</p>
+                <a href="#" class="project-link">查看详情 <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="project-card anim-rotate delay-4">
+                <div class="project-meta">
+                    <span class="project-type-tag">跨模态生成</span>
+                    <span class="project-status status-beta">测试中</span>
+                </div>
+                <h4>AI视频</h4>
+                <p class="desc">AI智能视频创作解决方案和评估系统</p>
+            </div>
+            <div class="project-card anim-rotate delay-5">
+                <div class="project-meta">
+                    <span class="project-type-tag">工具</span>
+                    <span class="project-status status-dev">开发中</span>
+                </div>
+                <h4>微信公众号引擎文 - 铜排版</h4>
+                <p class="desc">智能排版工具，一键生成高质量公众号文章排版设计</p>
+            </div>
+            <div class="project-card anim-rotate delay-6">
+                <div class="project-meta">
+                    <span class="project-type-tag">AI Agent</span>
+                    <span class="project-status status-beta">测试中</span>
+                </div>
+                <h4>教育智慧体</h4>
+                <p class="desc">面向教育场景的智能辅助应用和教学解决方案</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Values Section -->
+    <section class="section">
+        <div class="values-grid">
+            <div class="value-item anim-scale delay-1">
+                <div class="icon"><i class="fas fa-map-marker-alt"></i></div>
+                <h4>陪伴</h4>
+                <p>保持开放的学习心态，陪伴彼此成长每一次技术升级</p>
+            </div>
+            <div class="value-item anim-scale delay-2">
+                <div class="icon"><i class="fas fa-lightbulb"></i></div>
+                <h4>创新</h4>
+                <p>打破常规思维，用创新的方式解决和优化每一个技术痛点</p>
+            </div>
+            <div class="value-item anim-scale delay-3">
+                <div class="icon"><i class="fas fa-heart"></i></div>
+                <h4>热爱</h4>
+                <p>对技术始终保持极致的热爱与追求，用专业赋予产品温度与灵性</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contact">
+        <div class="contact-wrapper">
+            <div class="contact-info anim-left delay-1">
+                <span class="section-tag">联系我们</span>
+                <h2>开启AI合作之旅</h2>
+                <p class="desc">无论你是想要了解我们的技术方案，还是想探讨合作机会，我们都期待与你交流。</p>
+                <div class="contact-detail">
+                    <div class="icon"><i class="fas fa-map-marker-alt"></i></div>
+                    <div>
+                        <h4>工作室地址</h4>
+                        <p>广州市从化区广州工程<br>为学 8210</p>
+                    </div>
+                </div>
+                <div class="contact-detail">
+                    <div class="icon"><i class="fas fa-envelope"></i></div>
+                    <div>
+                        <h4>电子邮件</h4>
+                        <p>nacoche0721@qq.com</p>
+                    </div>
+                </div>
+                <div class="contact-detail">
+                    <div class="icon"><i class="fas fa-graduation-cap"></i></div>
+                    <div>
+                        <h4>所属平台</h4>
+                        <p>广州工程技术职业学院 · 信息工程学院</p>
+                    </div>
+                </div>
+            </div>
+            <div class="contact-form anim-right delay-2">
+                <h3>发送消息</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>姓名</label>
+                        <input type="text" placeholder="您的姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>电话</label>
+                        <input type="tel" placeholder="联系方式">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>主题</label>
+                    <select>
+                        <option>技术咨询</option>
+                        <option>项目合作</option>
+                        <option>加入我们</option>
+                        <option>其他</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>留言</label>
+                    <textarea placeholder="请输入您的留言..."></textarea>
+                </div>
+                <button class="form-submit-btn">
+                    发送消息 <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer anim-up">
+        <div class="footer-left">
+            <div class="footer-logo-icon">O</div>
+            <span class="footer-logo-text">ATRI Studio</span>
+        </div>
+        <ul class="footer-links">
+            <li><a href="#about">关于我们</a></li>
+            <li><a href="#team">团队成员</a></li>
+            <li><a href="#projects">项目服务</a></li>
+            <li><a href="#contact">联系我们</a></li>
+        </ul>
+        <span class="footer-copyright">© 2026 ATRI Studio · 广州工程技术职业学院</span>
+    </footer>
+
+    <script>
+        // ============ Particles Animation ============
+        let particlesEnabled = true;
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let animationId;
+        let mouseX = 0, mouseY = 0;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                // 粒子被鼠标轻微推开
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 150) {
+                    this.x -= dx * 0.005;
+                    this.y -= dy * 0.005;
+                }
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 229, 204, ${this.opacity})`;
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.min(80, Math.floor((canvas.width * canvas.height) / 15000));
+            for (let i = 0; i < count; i++) particles.push(new Particle());
+        }
+
+        function drawLines() {
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(0, 229, 204, ${0.06 * (1 - dist / 150)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animateParticles() {
+            if (!particlesEnabled) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            drawLines();
+            animationId = requestAnimationFrame(animateParticles);
+        }
+
+        resizeCanvas(); initParticles(); animateParticles();
+        window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
+
+        function setParticles(enabled) {
+            particlesEnabled = enabled;
+            if (enabled) { cancelAnimationFrame(animationId); animateParticles(); }
+        }
+
+        // ============ Cursor Glow ============
+        const cursorGlow = document.getElementById('cursorGlow');
+        let glowActive = false;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            if (!glowActive) { cursorGlow.classList.add('active'); glowActive = true; }
+            cursorGlow.style.left = e.clientX + 'px';
+            cursorGlow.style.top = e.clientY + 'px';
+        });
+        document.addEventListener('mouseleave', () => {
+            cursorGlow.classList.remove('active');
+            glowActive = false;
+        });
+
+        // ============ Scroll Animation Observer ============
+        const scrollObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.08,
+            rootMargin: '0px 0px -40px 0px'
+        });
+
+        // 观察所有动画元素
+        document.querySelectorAll(
+            '.anim-up, .anim-left, .anim-right, .anim-scale, .anim-blur, .anim-flip, .anim-rotate, .animate-on-scroll, .section-divider'
+        ).forEach(el => {
+            scrollObserver.observe(el);
+        });
+
+        // ============ Parallax & Navbar Scroll ============
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const scrollY = window.scrollY;
+                    // Navbar
+                    const navbar = document.getElementById('navbar');
+                    if (scrollY > 50) navbar.classList.add('scrolled');
+                    else navbar.classList.remove('scrolled');
+                    // Hero glow parallax
+                    const heroGlow = document.querySelector('.hero-glow');
+                    if (heroGlow) {
+                        heroGlow.style.transform = `translate(-50%, calc(-50% + ${scrollY * 0.15}px))`;
+                    }
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        });
+
+        // ============ 3D Tilt Effect on Cards ============
+        document.querySelectorAll('.team-card, .project-card, .about-feature-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                const rotateX = (y - centerY) / centerY * -4;
+                const rotateY = (x - centerX) / centerX * 4;
+                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-8px)`;
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = '';
+            });
+        });
+
+        // ============ Background Customizer ============
+        function toggleBgPanel() {
+            document.getElementById('bgPanel').classList.toggle('active');
+        }
+        function changeBgColor(color) {
+            const bgLayer = document.getElementById('bg-layer');
+            bgLayer.style.backgroundImage = 'none';
+            bgLayer.style.backgroundColor = color;
+        }
+        function uploadBgImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const bgLayer = document.getElementById('bg-layer');
+                    bgLayer.style.backgroundImage = `url(${e.target.result})`;
+                    bgLayer.style.backgroundSize = 'cover';
+                    bgLayer.style.backgroundPosition = 'center';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        function changeOverlay(val) {
+            document.getElementById('overlayVal').textContent = val + '%';
+            document.getElementById('bg-overlay').style.background = `rgba(10, 14, 23, ${val / 100})`;
+        }
+        function presetBg(type, el) {
+            const bgLayer = document.getElementById('bg-layer');
+            bgLayer.style.backgroundImage = 'none';
+            document.querySelectorAll('.preset-bg-item').forEach(e => e.classList.remove('active'));
+            if (el) el.classList.add('active');
+            const presets = {
+                'default': '#0a0e17',
+                'gradient1': 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+                'gradient2': 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)',
+                'gradient3': 'linear-gradient(135deg, #0d1b2a, #1b263b, #415a77)',
+                'dark': 'linear-gradient(135deg, #000000, #1a1a1a)',
+                'purple': 'linear-gradient(135deg, #0c0c1d, #1a0a2e)',
+                'red': 'linear-gradient(135deg, #1a0000, #2d0a0a)',
+                'green': 'linear-gradient(135deg, #001a0a, #0a2d1a)',
+            };
+            bgLayer.style.background = presets[type] || presets['default'];
+        }
+        function resetBg() {
+            const bgLayer = document.getElementById('bg-layer');
+            bgLayer.style.backgroundImage = 'none';
+            bgLayer.style.background = '#0a0e17';
+            document.getElementById('bg-overlay').style.background = 'rgba(10, 14, 23, 0.85)';
+            document.getElementById('bgColor').value = '#0a0e17';
+            document.getElementById('overlayRange').value = 85;
+            document.getElementById('overlayVal').textContent = '85%';
+            particlesEnabled = true;
+            cancelAnimationFrame(animationId);
+            animateParticles();
+            document.querySelectorAll('.preset-bg-item').forEach((e, i) => {
+                e.classList.toggle('active', i === 0);
+            });
+        }
+
+        // ============ Mobile Menu ============
+        function toggleMenu() { document.getElementById('navLinks').classList.toggle('active'); }
+
+        // ============ Smooth Scroll ============
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.getElementById('navLinks').classList.remove('active');
+                }
+            });
+        });
+
+        // Close panel when clicking outside
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('bgPanel');
+            const toggle = document.querySelector('.bg-customizer-toggle');
+            if (!panel.contains(e.target) && !toggle.contains(e.target)) {
+                panel.classList.remove('active');
+            }
+        });
+    </script>
+
+</body>
+
+</html>
