@@ -19,7 +19,6 @@
           <h1 class="header-title">{{ botName }}</h1>
         </div>
         <div class="header-right">
-          <!-- 用户信息区域（可点击展开菜单） -->
           <div class="user-info" ref="userInfoRef" @click="showUserMenu = !showUserMenu">
             <div class="user-avatar-small">
               <img v-if="userAvatar" :src="userAvatar" alt="头像" />
@@ -28,7 +27,6 @@
             <span class="user-display-name">{{ displayName }}</span>
             <span class="material-icons-round arrow-icon" :class="{ rotated: showUserMenu }">expand_more</span>
 
-            <!-- 下拉菜单 -->
             <Transition name="dropdown">
               <div v-if="showUserMenu" class="user-dropdown">
                 <div class="dropdown-item" @click.stop="openProfile">
@@ -99,8 +97,14 @@ import ChatMessage from './ChatMessage.vue'
 import InputBar from './InputBar.vue'
 import MusicPlayer from './MusicPlayer.vue'
 import ProfileModal from './ProfileModal.vue'
+import { loadOml2d } from 'oh-my-live2d'
 
 const router = useRouter()
+
+// ==========================================
+// API 配置
+// ==========================================
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 // ==========================================
 // 用户相关
@@ -111,7 +115,6 @@ const showUserMenu = ref(false)
 const showProfile = ref(false)
 const userInfoRef = ref(null)
 
-// 显示名称优先级：昵称 > 用户名 > 默认
 const displayName = computed(() => {
   return userNickname.value
     || localStorage.getItem('nickname')
@@ -119,34 +122,17 @@ const displayName = computed(() => {
     || '用户'
 })
 
-// 页面加载时读取本地存储
-onMounted(() => {
-  userNickname.value = localStorage.getItem('nickname') || localStorage.getItem('username') || ''
-  userAvatar.value = localStorage.getItem('avatar') || null
-})
-
-// 点击页面其他地方关闭下拉菜单
 const handleClickOutside = (e) => {
   if (userInfoRef.value && !userInfoRef.value.contains(e.target)) {
     showUserMenu.value = false
   }
 }
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
-// 打开资料设置
 const openProfile = () => {
   showUserMenu.value = false
   showProfile.value = true
 }
 
-// 资料更新回调
 const handleProfileUpdated = ({ nickname, avatar }) => {
   if (nickname) {
     userNickname.value = nickname
@@ -159,7 +145,6 @@ const handleProfileUpdated = ({ nickname, avatar }) => {
   showProfile.value = false
 }
 
-// 退出登录
 const handleLogout = () => {
   showUserMenu.value = false
   if (confirm('确定要退出登录吗？')) {
@@ -178,10 +163,15 @@ const botName = ref("ATRI教育助手")
 const messages = ref([])
 const isGenerating = ref(false)
 const chatBodyRef = ref(null)
-const welcomeText = "你好，我是AI助手，有什么可以帮你的吗？"
+const sessionId = ref('')
+const terminalId = ref('')
+const welcomeText = "你好，我是ATRI教育助手，有什么可以帮你的吗？"
 const quickActions = ref([
-  { text: "写一首诗", value: "请帮我写一首关于春天的诗" },
-  { text: "讲个笑话", value: "给我讲个有趣的笑话" }
+  { id: 1, text: "帮我解一道数学题", icon: "calculate" },
+  { id: 2, text: "解释一下光合作用", icon: "science" },
+  { id: 3, text: "帮我写一篇作文", icon: "edit_note" },
+  { id: 4, text: "英语语法讲解", icon: "translate" },
+  { id: 5, text: "制定学习计划", icon: "schedule" }
 ])
 
 const scrollToBottom = async () => {
@@ -193,20 +183,16 @@ const scrollToBottom = async () => {
 
 const clearChat = () => {
   messages.value = []
+  sessionId.value = ''
 }
 
 const handleQuickSend = (text) => {
   handleSend(text)
 }
 
-// 在 <script setup> 中，找到 handleSend 函数，整个替换为：
-
-const API_URL = import.meta.env.VITE_API_URL || ''
-
-// 会话状态
-const sessionId = ref('')
-const terminalId = ref('')
-
+// ==========================================
+// 核心：发送消息并调用后端API
+// ==========================================
 const handleSend = async (text) => {
   if (!text?.trim() || isGenerating.value) return
 
@@ -218,7 +204,7 @@ const handleSend = async (text) => {
   })
   await scrollToBottom()
 
-  // 添加AI消息占位
+  // 添加AI占位消息
   const aiMsgId = Date.now() + 1
   messages.value.push({
     id: aiMsgId,
@@ -231,7 +217,7 @@ const handleSend = async (text) => {
   await scrollToBottom()
 
   try {
-    // 调用后端流式接口
+    // ========== 尝试流式接口 ==========
     const response = await fetch(API_URL + '/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -242,17 +228,20 @@ const handleSend = async (text) => {
       })
     })
 
-    if (!response.ok) {
-      throw new Error('请求失败: ' + response.status)
-    }
-
     const targetMsg = messages.value.find(m => m.id === aiMsgId)
     if (!targetMsg) return
 
+    if (!response.ok) {
+      // 流式接口失败，降级到普通接口
+      console.warn('流式接口返回', response.status, '，降级到普通接口')
+      await fallbackChat(text, targetMsg)
+      return
+    }
+
+    // 流式读取
     targetMsg.isLoading = false
     targetMsg.isStreaming = true
 
-    // 读取 SSE 流
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -267,13 +256,8 @@ const handleSend = async (text) => {
 
       for (const line of lines) {
         const trimmed = line.trim()
-
         if (!trimmed || trimmed.startsWith('event:')) continue
-
-        if (trimmed === 'data: [DONE]') {
-          // 流结束
-          continue
-        }
+        if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') continue
 
         if (trimmed.startsWith('data:')) {
           const jsonStr = trimmed.slice(5).trim()
@@ -282,14 +266,12 @@ const handleSend = async (text) => {
           try {
             const data = JSON.parse(jsonStr)
 
-            // 提取回复文本（根据腾讯云智能体返回格式）
-            // 格式1: choices[0].delta.content（流式）
-            // 格式2: choices[0].message.content（非流式）
-            // 格式3: Response.Reply（腾讯云旧格式）
+            // 兼容多种返回格式
             const delta = data.choices?.[0]?.delta?.content
               || data.choices?.[0]?.message?.content
               || data.Response?.Reply
               || data.reply
+              || data.content
               || ''
 
             if (delta) {
@@ -297,16 +279,12 @@ const handleSend = async (text) => {
               await scrollToBottom()
             }
 
-            // 保存 sessionId
-            if (data.session_id) {
-              sessionId.value = data.session_id
-            }
-            if (data.Response?.SessionId) {
-              sessionId.value = data.Response.SessionId
-            }
-
+            // 保存会话ID
+            if (data.session_id) sessionId.value = data.session_id
+            if (data.sessionId) sessionId.value = data.sessionId
+            if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
           } catch (e) {
-            // 非JSON数据，可能是纯文本，直接追加
+            // 非JSON，可能是纯文本
             if (jsonStr && jsonStr !== '[DONE]') {
               targetMsg.content += jsonStr
               await scrollToBottom()
@@ -316,43 +294,29 @@ const handleSend = async (text) => {
       }
     }
 
-    // 流结束
     targetMsg.isStreaming = false
 
-    // 如果流式没拿到内容，降级用非流式接口
-    if (!targetMsg.content) {
+    // 如果流式没拿到内容，降级
+    if (!targetMsg.content.trim()) {
+      console.warn('流式返回为空，降级到普通接口')
       targetMsg.isLoading = true
       targetMsg.isStreaming = false
-
-      const fallbackRes = await fetch(API_URL + '/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text.trim(),
-          sessionId: sessionId.value,
-          terminalId: terminalId.value
-        })
-      })
-
-      const fallbackData = await fallbackRes.json()
-      targetMsg.isLoading = false
-      targetMsg.content = fallbackData.reply || '抱歉，暂时无法回复'
-
-      if (fallbackData.sessionId) {
-        sessionId.value = fallbackData.sessionId
-      }
-      if (fallbackData.terminalId) {
-        terminalId.value = fallbackData.terminalId
-      }
+      await fallbackChat(text, targetMsg)
     }
 
   } catch (err) {
-    console.error('聊天请求失败:', err)
+    console.error('流式请求失败:', err)
     const targetMsg = messages.value.find(m => m.id === aiMsgId)
     if (targetMsg) {
-      targetMsg.isLoading = false
-      targetMsg.isStreaming = false
-      targetMsg.content = '网络异常，请检查连接后重试'
+      // 降级到普通接口
+      try {
+        await fallbackChat(text, targetMsg)
+      } catch (fallbackErr) {
+        console.error('普通接口也失败:', fallbackErr)
+        targetMsg.isLoading = false
+        targetMsg.isStreaming = false
+        targetMsg.content = '网络异常，请检查连接后重试'
+      }
     }
   } finally {
     isGenerating.value = false
@@ -361,11 +325,51 @@ const handleSend = async (text) => {
 }
 
 // ==========================================
-// Live2D 初始化
+// 降级：普通非流式接口
 // ==========================================
-import { loadOml2d } from 'oh-my-live2d'
+const fallbackChat = async (text, targetMsg) => {
+  try {
+    const res = await fetch(API_URL + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text.trim(),
+        sessionId: sessionId.value,
+        terminalId: terminalId.value
+      })
+    })
+
+    const data = await res.json()
+
+    targetMsg.isLoading = false
+    targetMsg.isStreaming = false
+    targetMsg.content = data.reply || data.Response?.Reply || '抱歉，暂时无法回复'
+
+    if (data.sessionId) sessionId.value = data.sessionId
+    if (data.terminalId) terminalId.value = data.terminalId
+    if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
+  } catch (err) {
+    targetMsg.isLoading = false
+    targetMsg.isStreaming = false
+    targetMsg.content = '网络异常，请检查连接后重试'
+    throw err
+  }
+}
+
+// ==========================================
+// 生命周期
+// ==========================================
+onMounted(() => {
+  // 读取用户信息
+  userNickname.value = localStorage.getItem('nickname') || localStorage.getItem('username') || ''
+  userAvatar.value = localStorage.getItem('avatar') || null
+
+  // 点击外部关闭菜单
+  document.addEventListener('click', handleClickOutside)
+})
 
 onMounted(async () => {
+  // Live2D 初始化
   try {
     const container = document.getElementById('live2d-container')
     if (!container) return
@@ -386,6 +390,10 @@ onMounted(async () => {
   } catch (error) {
     console.error("Live2D加载失败:", error)
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
