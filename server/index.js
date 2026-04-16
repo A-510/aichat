@@ -174,7 +174,7 @@ app.post('/api/chat', async (req, res) => {
       requestBody.session_id = sessionId;
     }
 
-    const apiUrl = 'https://aiadp.cloud.tencent.com/aiadp/api/v1/chat/completions';
+    const apiUrl = 'https://wss.lke.cloud.tencent.com/v1/chat/completions';
 
     const response = await fetch(apiUrl, {
       method: 'POST',
