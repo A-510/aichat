@@ -199,9 +199,18 @@ const handleQuickSend = (text) => {
   handleSend(text)
 }
 
+// 在 <script setup> 中，找到 handleSend 函数，整个替换为：
+
+const API_URL = import.meta.env.VITE_API_URL || ''
+
+// 会话状态
+const sessionId = ref('')
+const terminalId = ref('')
+
 const handleSend = async (text) => {
   if (!text?.trim() || isGenerating.value) return
 
+  // 添加用户消息
   messages.value.push({
     id: Date.now(),
     role: 'user',
@@ -209,6 +218,7 @@ const handleSend = async (text) => {
   })
   await scrollToBottom()
 
+  // 添加AI消息占位
   const aiMsgId = Date.now() + 1
   messages.value.push({
     id: aiMsgId,
@@ -220,17 +230,134 @@ const handleSend = async (text) => {
   isGenerating.value = true
   await scrollToBottom()
 
-  setTimeout(async () => {
+  try {
+    // 调用后端流式接口
+    const response = await fetch(API_URL + '/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text.trim(),
+        sessionId: sessionId.value,
+        terminalId: terminalId.value
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('请求失败: ' + response.status)
+    }
+
+    const targetMsg = messages.value.find(m => m.id === aiMsgId)
+    if (!targetMsg) return
+
+    targetMsg.isLoading = false
+    targetMsg.isStreaming = true
+
+    // 读取 SSE 流
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+
+        if (!trimmed || trimmed.startsWith('event:')) continue
+
+        if (trimmed === 'data: [DONE]') {
+          // 流结束
+          continue
+        }
+
+        if (trimmed.startsWith('data:')) {
+          const jsonStr = trimmed.slice(5).trim()
+          if (!jsonStr || jsonStr === '[DONE]') continue
+
+          try {
+            const data = JSON.parse(jsonStr)
+
+            // 提取回复文本（根据腾讯云智能体返回格式）
+            // 格式1: choices[0].delta.content（流式）
+            // 格式2: choices[0].message.content（非流式）
+            // 格式3: Response.Reply（腾讯云旧格式）
+            const delta = data.choices?.[0]?.delta?.content
+              || data.choices?.[0]?.message?.content
+              || data.Response?.Reply
+              || data.reply
+              || ''
+
+            if (delta) {
+              targetMsg.content += delta
+              await scrollToBottom()
+            }
+
+            // 保存 sessionId
+            if (data.session_id) {
+              sessionId.value = data.session_id
+            }
+            if (data.Response?.SessionId) {
+              sessionId.value = data.Response.SessionId
+            }
+
+          } catch (e) {
+            // 非JSON数据，可能是纯文本，直接追加
+            if (jsonStr && jsonStr !== '[DONE]') {
+              targetMsg.content += jsonStr
+              await scrollToBottom()
+            }
+          }
+        }
+      }
+    }
+
+    // 流结束
+    targetMsg.isStreaming = false
+
+    // 如果流式没拿到内容，降级用非流式接口
+    if (!targetMsg.content) {
+      targetMsg.isLoading = true
+      targetMsg.isStreaming = false
+
+      const fallbackRes = await fetch(API_URL + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text.trim(),
+          sessionId: sessionId.value,
+          terminalId: terminalId.value
+        })
+      })
+
+      const fallbackData = await fallbackRes.json()
+      targetMsg.isLoading = false
+      targetMsg.content = fallbackData.reply || '抱歉，暂时无法回复'
+
+      if (fallbackData.sessionId) {
+        sessionId.value = fallbackData.sessionId
+      }
+      if (fallbackData.terminalId) {
+        terminalId.value = fallbackData.terminalId
+      }
+    }
+
+  } catch (err) {
+    console.error('聊天请求失败:', err)
     const targetMsg = messages.value.find(m => m.id === aiMsgId)
     if (targetMsg) {
       targetMsg.isLoading = false
-      targetMsg.isStreaming = true
-      targetMsg.content = `这是一条模拟的AI回复。你刚刚说了：${text}`
-      isGenerating.value = false
-      await scrollToBottom()
-      setTimeout(() => { targetMsg.isStreaming = false }, 1000)
+      targetMsg.isStreaming = false
+      targetMsg.content = '网络异常，请检查连接后重试'
     }
-  }, 1000)
+  } finally {
+    isGenerating.value = false
+    await scrollToBottom()
+  }
 }
 
 // ==========================================
