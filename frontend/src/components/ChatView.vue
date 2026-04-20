@@ -59,14 +59,16 @@
 
         <div class="messages-list">
           <ChatMessage
-            v-for="msg in messages"
-            :key="msg.id"
-            :role="msg.role"
-            :content="msg.content"
-            :is-loading="msg.isLoading"
-            :is-streaming="msg.isStreaming"
-            :user-avatar="userAvatar"
-          />
+         v-for="msg in messages"
+        :key="msg.id"
+        :role="msg.role"
+        :content="msg.content"
+        :is-loading="msg.isLoading"
+        :is-streaming="msg.isStreaming"
+        :user-avatar="userAvatar"
+        :options="msg.options"
+        @option-click="handleSend"
+        />
         </div>
       </div>
 
@@ -264,26 +266,31 @@ const handleSend = async (text) => {
           if (!jsonStr || jsonStr === '[DONE]') continue
 
           try {
-            const data = JSON.parse(jsonStr)
+           
+          const data = JSON.parse(jsonStr)
 
-            // 兼容多种返回格式
-            const delta = data.choices?.[0]?.delta?.content
-              || data.choices?.[0]?.message?.content
-              || data.Response?.Reply
-              || data.reply
-              || data.content
-              || ''
-
-            if (delta) {
-              targetMsg.content += delta
-              await scrollToBottom()
-            }
-
-            // 保存会话ID
-            if (data.session_id) sessionId.value = data.session_id
-            if (data.sessionId) sessionId.value = data.sessionId
-            if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
-          } catch (e) {
+          // ✅ 后端注入的选项按钮事件
+          if (data.__options && Array.isArray(data.__options)) {
+          targetMsg.options = data.__options
+          await scrollToBottom()
+          continue
+        }
+        // 兼容多种返回格式
+        const delta = data.choices?.[0]?.delta?.content
+          || data.choices?.[0]?.message?.content
+          || data.Response?.Reply
+          || data.reply
+          || data.content
+          || ''
+          if (delta) {
+            targetMsg.content += delta
+            await scrollToBottom()
+          }
+          // 保存会话ID
+          if (data.session_id) sessionId.value = data.session_id
+          if (data.sessionId) sessionId.value = data.sessionId
+          if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
+        } catch (e) {
             // 非JSON，可能是纯文本
             if (jsonStr && jsonStr !== '[DONE]') {
               targetMsg.content += jsonStr
