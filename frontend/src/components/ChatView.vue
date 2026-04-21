@@ -254,20 +254,12 @@ const handleSend = async (payload) => {
     let buffer = ''
     let receivedAny = false
     let lastFullText = ''
-    // 看门狗：15秒没新数据就强制关流
-    let lastDataTime = Date.now()
-    const watchdog = setInterval(() => {
-    if (Date.now() - lastDataTime > 15000) {
-      console.warn('[SSE] 15秒无数据，强制断开')
-      reader.cancel().catch(() => {})
-      clearInterval(watchdog)
-    }
-  }, 3000)  // 记录后端"累积全文"，用来算增量，避免重复
+    // 看门狗：15秒没新数据就强制关流  // 记录后端"累积全文"，用来算增量，避免重复
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      lastDataTime = Date.now()   
+      //lastDataTime = Date.now()   
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
@@ -345,7 +337,7 @@ const handleSend = async (payload) => {
         }
       }
     }
-    clearInterval(watchdog) 
+   // clearInterval(watchdog) 
     targetMsg.isStreaming = false
 
     if (!receivedAny) {
@@ -355,7 +347,7 @@ const handleSend = async (payload) => {
     }
 
   } catch (err) {
-    clearInterval(watchdog)  
+    //clearInterval(watchdog)  
     console.error('流式请求失败:', err)
     const targetMsg = messages.value.find(m => m.id === aiMsgId)
     if (targetMsg) {
