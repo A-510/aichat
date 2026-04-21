@@ -67,6 +67,7 @@
         :is-streaming="msg.isStreaming"
         :user-avatar="userAvatar"
         :options="msg.options"
+        :files="msg.files"
         @option-click="handleSend"
         />
         </div>
@@ -189,20 +190,26 @@ const clearChat = () => {
 }
 
 const handleQuickSend = (text) => {
-  handleSend(text)
+  handleSend({ text: text, files: [] })
 }
 
 // ==========================================
 // 核心：发送消息并调用后端API
 // ==========================================
-const handleSend = async (text) => {
-  if (!text?.trim() || isGenerating.value) return
+const handleSend = async (payload) => {
+  // 兼容字符串调用（ChatMessage 的 option-click 还是传字符串）
+  const text  = typeof payload === 'string' ? payload : (payload?.text || '')
+  const files = typeof payload === 'string' ? [] : (payload?.files || [])
 
-  // 添加用户消息
+  const trimmed = text.trim()
+  if ((!trimmed && files.length === 0) || isGenerating.value) return
+
+  // 添加用户消息（带附件）
   messages.value.push({
     id: Date.now(),
     role: 'user',
-    content: text.trim()
+    content: trimmed,
+    files: files
   })
   await scrollToBottom()
 
@@ -219,12 +226,12 @@ const handleSend = async (text) => {
   await scrollToBottom()
 
   try {
-    // ========== 尝试流式接口 ==========
     const response = await fetch(API_URL + '/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: text.trim(),
+        message: trimmed,
+        files: files,
         sessionId: sessionId.value,
         terminalId: terminalId.value
       })
@@ -234,13 +241,11 @@ const handleSend = async (text) => {
     if (!targetMsg) return
 
     if (!response.ok) {
-      // 流式接口失败，降级到普通接口
       console.warn('流式接口返回', response.status, '，降级到普通接口')
-      await fallbackChat(text, targetMsg)
+      await fallbackChat(trimmed, files, targetMsg)
       return
     }
 
-    // 流式读取
     targetMsg.isLoading = false
     targetMsg.isStreaming = true
 
@@ -257,41 +262,37 @@ const handleSend = async (text) => {
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('event:')) continue
-        if (trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') continue
+        const tl = line.trim()
+        if (!tl || tl.startsWith('event:')) continue
+        if (tl === 'data: [DONE]' || tl === 'data:[DONE]') continue
 
-        if (trimmed.startsWith('data:')) {
-          const jsonStr = trimmed.slice(5).trim()
+        if (tl.startsWith('data:')) {
+          const jsonStr = tl.slice(5).trim()
           if (!jsonStr || jsonStr === '[DONE]') continue
 
           try {
-           
-          const data = JSON.parse(jsonStr)
+            const data = JSON.parse(jsonStr)
 
-          // ✅ 后端注入的选项按钮事件
-          if (data.__options && Array.isArray(data.__options)) {
-          targetMsg.options = data.__options
-          await scrollToBottom()
-          continue
-        }
-        // 兼容多种返回格式
-        const delta = data.choices?.[0]?.delta?.content
-          || data.choices?.[0]?.message?.content
-          || data.Response?.Reply
-          || data.reply
-          || data.content
-          || ''
-          if (delta) {
-            targetMsg.content += delta
-            await scrollToBottom()
-          }
-          // 保存会话ID
-          if (data.session_id) sessionId.value = data.session_id
-          if (data.sessionId) sessionId.value = data.sessionId
-          if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
-        } catch (e) {
-            // 非JSON，可能是纯文本
+            if (data.__options && Array.isArray(data.__options)) {
+              targetMsg.options = data.__options
+              await scrollToBottom()
+              continue
+            }
+
+            const delta = data.delta
+              || data.choices?.[0]?.message?.content
+              || data.Response?.Reply
+              || data.reply
+              || data.content
+              || ''
+            if (delta) {
+              targetMsg.content += delta
+              await scrollToBottom()
+            }
+            if (data.session_id) sessionId.value = data.session_id
+            if (data.sessionId) sessionId.value = data.sessionId
+            if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
+          } catch (e) {
             if (jsonStr && jsonStr !== '[DONE]') {
               targetMsg.content += jsonStr
               await scrollToBottom()
@@ -303,21 +304,19 @@ const handleSend = async (text) => {
 
     targetMsg.isStreaming = false
 
-    // 如果流式没拿到内容，降级
     if (!targetMsg.content.trim()) {
       console.warn('流式返回为空，降级到普通接口')
       targetMsg.isLoading = true
       targetMsg.isStreaming = false
-      await fallbackChat(text, targetMsg)
+      await fallbackChat(trimmed, files, targetMsg)
     }
 
   } catch (err) {
     console.error('流式请求失败:', err)
     const targetMsg = messages.value.find(m => m.id === aiMsgId)
     if (targetMsg) {
-      // 降级到普通接口
       try {
-        await fallbackChat(text, targetMsg)
+        await fallbackChat(trimmed, files, targetMsg)
       } catch (fallbackErr) {
         console.error('普通接口也失败:', fallbackErr)
         targetMsg.isLoading = false
@@ -334,13 +333,14 @@ const handleSend = async (text) => {
 // ==========================================
 // 降级：普通非流式接口
 // ==========================================
-const fallbackChat = async (text, targetMsg) => {
+const fallbackChat = async (text, files, targetMsg) => {
   try {
     const res = await fetch(API_URL + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: text.trim(),
+        message: text,
+        files: files || [],
         sessionId: sessionId.value,
         terminalId: terminalId.value
       })

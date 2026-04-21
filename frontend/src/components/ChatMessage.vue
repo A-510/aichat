@@ -16,12 +16,36 @@
           <span class="loading-dot"></span>
           <span class="loading-dot"></span>
         </div>
-
+        
         <!-- 内容 -->
-        <div v-else class="bubble-content">
-          <p v-for="(line, idx) in contentLines" :key="idx">{{ line }}</p>
-          <span v-if="isStreaming" class="streaming-cursor"></span>
-        </div>
+        <!-- 内容 -->
+    <div v-else class="bubble-content">
+      <!-- ✅ 附件展示 -->
+  <div v-if="files && files.length" class="msg-files">
+    <div v-for="(f, i) in files" :key="i" class="msg-file">
+      <a
+        v-if="f.type === 'image'"
+        :href="f.url"
+        target="_blank"
+        class="msg-file-image"
+      >
+        <img :src="f.url" :alt="f.name" />
+      </a>
+      <a
+        v-else
+        :href="f.url"
+        target="_blank"
+        class="msg-file-doc"
+      >
+        <span class="material-icons-round">description</span>
+        <span class="msg-file-name">{{ f.name }}</span>
+      </a>
+    </div>
+  </div>
+
+  <p v-for="(line, idx) in contentLines" :key="idx">{{ line }}</p>
+  <span v-if="isStreaming" class="streaming-cursor"></span>
+</div>
       </div>
 
       <!-- ✅ 选项按钮（仅 AI 消息、非加载、非流式中、有 options 时显示） -->
@@ -57,7 +81,8 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   userAvatar: { type: String, default: '' },
-  options: { type: Array, default: () => [] },   // ✅ 新增
+  options: { type: Array, default: () => [] },
+  files: { type: Array, default: () => [] },// ✅ 新增
 });
 
 defineEmits(['option-click']);   // ✅ 新增
@@ -69,6 +94,53 @@ const contentLines = computed(function () {
 </script>
 
 <style scoped>
+/* ====== 消息附件 ====== */
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.msg-file-image {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.msg-file-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.msg-file-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 10px;
+  color: var(--accent, #10b981);
+  text-decoration: none;
+  font-size: 13px;
+  max-width: 260px;
+}
+.msg-file-doc:hover { background: rgba(16, 185, 129, 0.15); }
+.msg-file-doc .material-icons-round { font-size: 18px; }
+.msg-file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 用户气泡里的文件按钮在深色背景上用白色 */
+.bubble--user .msg-file-doc {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
 .message-row {
   display: flex;
   align-items: flex-start;
@@ -136,6 +208,7 @@ const contentLines = computed(function () {
   border: 1px solid var(--ai-bubble-border);
   border-bottom-left-radius: 6px;
 }
+
 .bubble-content p { margin: 0; }
 .bubble-content p + p { margin-top: 8px; }
 
