@@ -136,6 +136,8 @@ async function onFilePick(e) {
       uploading: true,
     };
     pendingFiles.value.push(item);
+    // ✅ 拿到数组里的响应式代理
+    const reactiveItem = pendingFiles.value[pendingFiles.value.length - 1];
 
     try {
       const fd = new FormData();
@@ -148,12 +150,13 @@ async function onFilePick(e) {
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      item.url = data.url;
-      item.uploading = false;
+      // ✅ 改代理，触发响应式
+      reactiveItem.url = data.url;
+      reactiveItem.uploading = false;
     } catch (err) {
       console.error('上传失败', err);
       alert('文件 ' + file.name + ' 上传失败');
-      const idx = pendingFiles.value.indexOf(item);
+      const idx = pendingFiles.value.indexOf(reactiveItem);
       if (idx >= 0) pendingFiles.value.splice(idx, 1);
     }
   }
