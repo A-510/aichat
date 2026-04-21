@@ -283,12 +283,22 @@ const handleSend = async (payload) => {
             continue
           }
 
-          // 1. 优先取"增量字段"
+          // 1. 优先取"增量字段"// 1. 优先取"增量字段"
           let delta = ''
           if (typeof data.delta === 'string') {
             delta = data.delta
+            // 同步更新累积全文，防止后续 content 字段重复追加
+            lastFullText += delta
           } else if (data.choices?.[0]?.delta?.content) {
             delta = data.choices[0].delta.content
+            lastFullText += delta
+          }
+
+          // 如果同一条消息里同时带了 content（全量），跳过它，避免重复
+          if (delta && (data.content || data.Response?.Reply || data.reply)) {
+            // 已经用 delta 处理过了，把 content 同步到 lastFullText
+            const fullInSameMsg = data.content || data.Response?.Reply || data.reply || ''
+            if (fullInSameMsg) lastFullText = fullInSameMsg
           }
 
           // 2. 没有增量字段，再看"全量字段"，自己算 diff
