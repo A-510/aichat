@@ -59,17 +59,17 @@
 
         <div class="messages-list">
           <ChatMessage
-         v-for="msg in messages"
-        :key="msg.id"
-        :role="msg.role"
-        :content="msg.content"
-        :is-loading="msg.isLoading"
-        :is-streaming="msg.isStreaming"
-        :user-avatar="userAvatar"
-        :options="msg.options"
-        :files="msg.files"
-        @option-click="handleSend"
-        />
+            v-for="msg in messages"
+            :key="msg.id"
+            :role="msg.role"
+            :content="msg.content"
+            :is-loading="msg.isLoading"
+            :is-streaming="msg.isStreaming"
+            :user-avatar="userAvatar"
+            :options="msg.options"
+            :files="msg.files"
+            @option-click="handleSend"
+          />
         </div>
       </div>
 
@@ -252,6 +252,8 @@ const handleSend = async (payload) => {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let receivedAny = false
+    let lastFullText = ''   // 记录后端"累积全文"，用来算增量，避免重复
 
     while (true) {
       const { done, value } = await reader.read()
@@ -263,51 +265,73 @@ const handleSend = async (payload) => {
 
       for (const line of lines) {
         const tl = line.trim()
-        if (!tl || tl.startsWith('event:')) continue
+        if (!tl || tl.startsWith('event:') || tl.startsWith(':')) continue
         if (tl === 'data: [DONE]' || tl === 'data:[DONE]') continue
+        if (!tl.startsWith('data:')) continue
 
-        if (tl.startsWith('data:')) {
-          const jsonStr = tl.slice(5).trim()
-          if (!jsonStr || jsonStr === '[DONE]') continue
+        const jsonStr = tl.slice(5).trim()
+        if (!jsonStr || jsonStr === '[DONE]') continue
 
-          try {
-            const data = JSON.parse(jsonStr)
+        try {
+          const data = JSON.parse(jsonStr)
+          console.log('[SSE]', data)   // 🔍 调试日志，确认无误后可删
 
-            if (data.__options && Array.isArray(data.__options)) {
-              targetMsg.options = data.__options
-              await scrollToBottom()
-              continue
-            }
+          // 选项按钮
+          if (data.__options && Array.isArray(data.__options)) {
+            targetMsg.options = data.__options
+            await scrollToBottom()
+            continue
+          }
 
-            const delta = data.delta
-              || data.choices?.[0]?.message?.content
-              || data.Response?.Reply
-              || data.reply
-              || data.content
-              || ''
-            if (delta) {
-              targetMsg.content += delta
-              await scrollToBottom()
-            }
-            if (data.session_id) sessionId.value = data.session_id
-            if (data.sessionId) sessionId.value = data.sessionId
-            if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
-          } catch (e) {
-            if (jsonStr && jsonStr !== '[DONE]') {
-              targetMsg.content += jsonStr
-              await scrollToBottom()
+          // 1. 优先取"增量字段"
+          let delta = ''
+          if (typeof data.delta === 'string') {
+            delta = data.delta
+          } else if (data.choices?.[0]?.delta?.content) {
+            delta = data.choices[0].delta.content
+          }
+
+          // 2. 没有增量字段，再看"全量字段"，自己算 diff
+          if (!delta) {
+            const full =
+              data.choices?.[0]?.message?.content ||
+              data.Response?.Reply ||
+              data.reply ||
+              data.content ||
+              ''
+
+            if (full) {
+              if (full.startsWith(lastFullText)) {
+                delta = full.slice(lastFullText.length)
+              } else {
+                // 不是扩展（重置/乱序），直接覆盖
+                delta = full
+                targetMsg.content = ''
+              }
+              lastFullText = full
             }
           }
+
+          if (delta) {
+            targetMsg.content += delta
+            receivedAny = true
+            await scrollToBottom()
+          }
+
+          if (data.session_id) sessionId.value = data.session_id
+          if (data.sessionId) sessionId.value = data.sessionId
+          if (data.Response?.SessionId) sessionId.value = data.Response.SessionId
+        } catch (e) {
+          console.warn('[SSE parse error]', jsonStr)
         }
       }
     }
 
     targetMsg.isStreaming = false
 
-    if (!targetMsg.content.trim()) {
+    if (!receivedAny) {
       console.warn('流式返回为空，降级到普通接口')
       targetMsg.isLoading = true
-      targetMsg.isStreaming = false
       await fallbackChat(trimmed, files, targetMsg)
     }
 
